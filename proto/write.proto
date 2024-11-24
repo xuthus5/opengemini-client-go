@@ -1,0 +1,61 @@
+syntax = "proto3";
+package proto;
+option go_package = "./proto";
+
+service WriteRowsService {
+  rpc WriteRows (WriteRowsRequest) returns (WriteRowsResponse) {}
+  rpc Ping(PingRequest) returns (PingResponse) {}
+}
+
+message WriteRowsRequest {
+  uint32 version = 1;
+  string database = 2;
+  string rp = 3;
+  string username = 4;
+  string password = 5;
+  repeated Row rows = 6;
+}
+
+message WriteRowsResponse {
+  ResponseCode code = 1;
+  string error = 2;
+}
+
+message Row {
+  string measurement = 1;
+  int64 min_time = 2;
+  int64 max_time = 3;
+  CompressAlgo compress_algo = 4; // compression algorithm for block
+  bytes block = 5;
+}
+
+enum CompressAlgo {
+  UNCOMPRESSED = 0;
+  LZ4_FAST = 1;
+  ZSTD_FAST = 2;
+  SNAPPY = 3;
+}
+
+enum ResponseCode {
+  Success = 0;
+  Partial = 1;
+  Failed = 2;
+}
+
+message PingRequest {
+  int64 timestamp = 1;
+  string client_id = 2;
+}
+
+enum ServerStatus {
+  Unknown = 0;
+  Up = 1;
+  Down = 2;
+}
+
+message PingResponse {
+  int64 timestamp = 1;
+  string client_id = 2;
+  ServerStatus status = 3;
+  string message = 4;
+}

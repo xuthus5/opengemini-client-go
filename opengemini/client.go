@@ -121,6 +121,29 @@ type Client interface {
 	ExposeMetrics() prometheus.Collector
 }
 
+// RPCClient represents a openGemini RPC client.
+type RPCClient interface {
+	// Ping checks the status of server nodes by sending a ping request to verify if the server is running properly.
+	// Returns nil if the server responds normally, otherwise returns an error.
+	Ping(ctx context.Context) error
+	// WritePoint writes a single point to the client. If batch processing is not enabled,
+	// you need to manually call the Flush method to ensure the data is sent to the server.
+	// The point will be sent to the server via RPC.
+	WritePoint(ctx context.Context, database, retentionPolicy string, point *Point) error
+	// WritePoints writes multiple points to the client. If batch processing is not enabled,
+	// you need to manually call the Flush method to ensure the data is sent to the server.
+	// The points will be sent to the server via RPC.
+	WritePoints(ctx context.Context, database, retentionPolicy string, points []*Point) error
+	// Flush sends the data in the buffer to the server. If batch processing is enabled,
+	// this method will be called automatically when the amount of data in the buffer reaches
+	// the configured threshold. If batch processing is not enabled, you need to manually call
+	// this method to ensure the data is sent to the server.
+	Flush(ctx context.Context, database, retentionPolicy string) error
+	// Close shuts down the client and releases any resources being used.
+	// Returns an error if the shutdown fails, nil otherwise.
+	Close() error
+}
+
 // Config is used to construct a openGemini Client instance.
 type Config struct {
 	// Addresses Configure the service URL for the openGemini service.
