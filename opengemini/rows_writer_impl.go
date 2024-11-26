@@ -86,18 +86,15 @@ func (r *RowsWriterClient) Flush(ctx context.Context, database, retentionPolicy 
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		// 启用keepalive以保持长连接
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                10 * time.Second, // 每10秒ping一次
-			Timeout:             3 * time.Second,  // 3秒超时
-			PermitWithoutStream: true,             // 允许无数据时保持连接
+			Time:                10 * time.Second, // 每隔Time时间，发送PING帧测量最小往返时间，确定空闲连接是否仍然有效
+			Timeout:             3 * time.Second,  // 超过 Timeout 关闭连接
+			PermitWithoutStream: true,             // 为true当连接空闲时仍然发送PING帧监测 为false不发送忽略
 		}),
-		// 配置初始窗口大小和连接窗口大小
-		grpc.WithInitialWindowSize(1 << 24),     // 16MB
-		grpc.WithInitialConnWindowSize(1 << 24), // 16MB
-		// 启用压缩?
-		grpc.WithDefaultCallOptions(grpc.UseCompressor("gzip")),
-		// 配置读写最大消息大小
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(64 * 1024 * 1024)), // 64MB
-		grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(64 * 1024 * 1024)), // 64MB
+		grpc.WithInitialWindowSize(1 << 24),                                    // 基于Stream的滑动窗口，类似于TCP的滑动窗口，用来做流控，默认64KiB 调大一点比如16MB
+		grpc.WithInitialConnWindowSize(1 << 24),                                // 基于Connection的滑动窗口，默认16 * 64KiB 调大一点比如16MB
+		grpc.WithDefaultCallOptions(grpc.UseCompressor("gzip")),                // 启用压缩
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(64 * 1024 * 1024)), // 最大允许接收的字节数 默认4MB 调大一点比如64MB
+		grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(64 * 1024 * 1024)), // 最大允许发送的字节数 默认4MB 调大一点比如64MB
 	}
 
 	conn, err := grpc.NewClient("127.0.0.1:8080", opts...)
