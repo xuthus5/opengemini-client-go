@@ -29,10 +29,12 @@ import (
 )
 
 const (
-	HttpContentTypeMsgpack = "application/x-msgpack"
-	HttpContentTypeJSON    = "application/json"
-	HttpEncodingGzip       = "gzip"
-	HttpEncodingZstd       = "zstd"
+	HttpHeaderAccept         = "Accept"
+	HttpHeaderAcceptEncoding = "Accept-Encoding"
+	HttpContentTypeMsgpack   = "application/x-msgpack"
+	HttpContentTypeJSON      = "application/json"
+	HttpEncodingGzip         = "gzip"
+	HttpEncodingZstd         = "zstd"
 )
 
 type Query struct {
@@ -108,20 +110,8 @@ func applyCodec(req *requestDetails, config *Config) {
 		req.header = make(http.Header)
 	}
 
-	switch config.ContentType {
-	case ContentTypeMsgPack:
-		req.header.Set("Accept", HttpContentTypeMsgpack)
-	case ContentTypeJSON:
-		req.header.Set("Accept", HttpContentTypeJSON)
-	}
-
-	switch config.CompressMethod {
-	case CompressMethodGzip:
-		req.header.Set("Accept-Encoding", HttpEncodingGzip)
-	case CompressMethodZstd:
-		req.header.Set("Accept-Encoding", HttpEncodingZstd)
-	}
-
+	req.header.Set(HttpHeaderAccept, config.ContentType.String())
+	req.header.Set(HttpHeaderAcceptEncoding, config.CompressMethod.String())
 }
 
 // retrieve query result from the response

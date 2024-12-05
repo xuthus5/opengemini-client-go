@@ -18,6 +18,7 @@ import "errors"
 
 var (
 	ErrAllServersDown    = errors.New("all servers down")
+	ErrEmptyAddress      = errors.New("empty address, must have at least one address")
 	ErrEmptyAuthToken    = errors.New("empty auth token")
 	ErrEmptyAuthUsername = errors.New("empty auth username")
 	ErrEmptyAuthPassword = errors.New("empty auth password")
@@ -27,6 +28,7 @@ var (
 	ErrEmptyTagOrField   = errors.New("empty tag or field")
 	ErrEmptyTagKey       = errors.New("empty tag key")
 	ErrRetentionPolicy   = errors.New("empty retention policy")
+	ErrEmptyRecord       = errors.New("empty record")
 )
 
 // checkDatabaseName checks if the database name is empty and returns an error if it is.

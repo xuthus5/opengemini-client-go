@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -33,7 +34,32 @@ const (
 type Codec string
 
 type ContentType string
+
+func (ct ContentType) String() string {
+	switch ct {
+	case ContentTypeMsgPack:
+		return HttpContentTypeMsgpack
+	case ContentTypeJSON:
+		return HttpContentTypeJSON
+	default:
+		return ""
+	}
+}
+
 type CompressMethod string
+
+func (cm CompressMethod) String() string {
+	switch cm {
+	case CompressMethodGzip:
+		return HttpEncodingGzip
+	case CompressMethodZstd:
+		return HttpEncodingZstd
+	case CompressMethodNone:
+		return ""
+	default:
+		return ""
+	}
+}
 
 const (
 	ContentTypeMsgPack ContentType = "MSGPACK"
@@ -69,6 +95,9 @@ type Client interface {
 	WriteBatchPoints(ctx context.Context, database string, bp []*Point) error
 	// WriteBatchPointsWithRp write batch points with retention policy
 	WriteBatchPointsWithRp(ctx context.Context, database string, rp string, bp []*Point) error
+	// WriteByGRPC write batch record to assigned database.retention_policy by gRPC.
+	// rbs RecordBuilder, it will generate Record and write to the database.
+	WriteByGRPC(ctx context.Context, rbs ...RecordBuilder) error
 
 	// CreateDatabase Create database
 	CreateDatabase(database string) error
@@ -166,6 +195,8 @@ type Config struct {
 	CustomMetricsLabels map[string]string
 	// Logger structured logger for logging operations
 	Logger *slog.Logger
+	// RPCConfig configuration information for rpc
+	RPCConfig *RPCConfig
 }
 
 // Address configuration for providing service.
@@ -174,6 +205,10 @@ type Address struct {
 	Host string
 	// Port exposed service port.
 	Port int
+}
+
+func (a Address) String() string {
+	return a.Host + ":" + strconv.Itoa(a.Port)
 }
 
 // AuthType type of identity authentication.
@@ -210,6 +245,22 @@ type RpConfig struct {
 	ShardGroupDuration string
 	// IndexDuration determines the time range of the index group
 	IndexDuration string
+}
+
+type RPCConfig struct {
+	// Addresses Configure the service endpoints for the openGemini grpc write service.
+	// This parameter is required.
+	Addresses []Address
+	// AuthConfig configuration information for authentication.
+	AuthConfig *AuthConfig
+	// BatchConfig configuration information for batch processing.
+	BatchConfig *BatchConfig
+	// TlsConfig configuration information for tls.
+	TlsConfig *tls.Config
+	// CompressMethod determines the compress method used for data transmission.
+	CompressMethod CompressMethod
+	// Timeout default 30s
+	Timeout time.Duration
 }
 
 // NewClient Creates a openGemini client instance
