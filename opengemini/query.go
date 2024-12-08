@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/klauspost/compress/zstd"
@@ -29,12 +30,18 @@ import (
 )
 
 const (
+	HttpHeaderAccept          = "Accept"
+	HttpHeaderAcceptEncoding  = "Accept-Encoding"
+	HttpHeaderContentType     = "Content-Type"
+	HttpHeaderContentEncoding = "Content-Encoding"
+
 	HttpContentTypeDefault = "*/*"
 	HttpContentTypeMsgpack = "application/x-msgpack"
 	HttpContentTypeJSON    = "application/json"
-	HttpEncodingDefault    = "*"
-	HttpEncodingGzip       = "gzip"
-	HttpEncodingZstd       = "zstd"
+
+	HttpEncodingDefault = "*"
+	HttpEncodingGzip    = "gzip"
+	HttpEncodingZstd    = "zstd"
 )
 
 type Query struct {
@@ -110,50 +117,79 @@ func applyCodec(req *requestDetails, config *Config) {
 		req.header = make(http.Header)
 	}
 
-	req.header.Set("Accept", config.ContentType.String())
-	req.header.Set("Accept-Encoding", config.CompressMethod.String())
+	req.header.Set(HttpHeaderAccept, config.ContentType.String())
+	req.header.Set(HttpHeaderAcceptEncoding, config.CompressMethod.String())
 }
 
-// retrieve query result from the response
+var (
+	// bufferPool is used to reuse buffers for reading response body
+	bufferPool = sync.Pool{
+		New: func() interface{} {
+			return bytes.NewBuffer(make([]byte, 0, 4096)) // 4KB initial capacity
+		},
+	}
+)
+
+// retrieveQueryResFromResp retrieve query result from the response
 func retrieveQueryResFromResp(resp *http.Response) (*QueryResult, error) {
+	if resp == nil {
+		return nil, errors.New("response is nil")
+	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, errors.New("read resp failed, error: " + err.Error())
+
+	// Get buffer from pool
+	buf := bufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufferPool.Put(buf)
+
+	_, err := io.Copy(buf, resp.Body)
+	if err != nil && err != io.EOF {
+		return nil, fmt.Errorf("read response failed: %w", err)
 	}
+
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("error resp, code: " + resp.Status + "body: " + string(body))
+		return nil, fmt.Errorf("server error: status=%s", resp.Status)
 	}
-	contentType := resp.Header.Get("Content-Type")
-	contentEncoding := resp.Header.Get("Content-Encoding")
-	var qr = new(QueryResult)
+
+	contentType := resp.Header.Get(HttpHeaderContentType)
+	contentEncoding := resp.Header.Get(HttpHeaderContentEncoding)
+
+	// Early validation to avoid unnecessary processing
+	switch contentType {
+	case HttpContentTypeMsgpack, HttpContentTypeJSON:
+	default:
+		return nil, fmt.Errorf("unsupported content type: %s", contentType)
+	}
+
+	body := buf.Bytes()
 	var decompressedBody []byte
 
-	// First, handle decompression
+	// Handle decompression
 	switch contentEncoding {
 	case HttpEncodingZstd:
 		decompressedBody, err = decodeZstdBody(body)
-		if err != nil {
-			return qr, err
-		}
 	case HttpEncodingGzip:
 		decompressedBody, err = decodeGzipBody(body)
-		if err != nil {
-			return qr, err
-		}
 	default:
 		decompressedBody = body
 	}
+	if err != nil {
+		return nil, fmt.Errorf("decompress failed: %w", err)
+	}
 
-	// Then, handle deserialization based on content type
+	// Reuse QueryResult object
+	qr := new(QueryResult)
 	switch contentType {
 	case HttpContentTypeMsgpack:
-		return qr, unmarshalMsgpack(decompressedBody, qr)
+		err = unmarshalMsgpack(decompressedBody, qr)
 	case HttpContentTypeJSON:
-		return qr, unmarshalJson(decompressedBody, qr)
-	default:
-		return qr, fmt.Errorf("unsupported content type: %s", contentType)
+		err = unmarshalJson(decompressedBody, qr)
 	}
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal failed: %w", err)
+	}
+
+	return qr, nil
 }
 
 func decodeGzipBody(body []byte) ([]byte, error) {
