@@ -33,7 +33,30 @@ const (
 type Codec string
 
 type ContentType string
+
+func (c ContentType) String() string {
+	switch c {
+	case ContentTypeMsgPack:
+		return HttpContentTypeMsgpack
+	case ContentTypeJSON:
+		return HttpContentTypeJSON
+	default:
+		return HttpContentTypeDefault
+	}
+}
+
 type CompressMethod string
+
+func (c CompressMethod) String() string {
+	switch c {
+	case CompressMethodGzip:
+		return HttpEncodingGzip
+	case CompressMethodZstd:
+		return HttpEncodingZstd
+	default:
+		return HttpEncodingDefault
+	}
+}
 
 const (
 	ContentTypeMsgPack ContentType = "MSGPACK"
